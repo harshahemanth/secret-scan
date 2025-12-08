@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "secret-scan"          
+version = "0.1.1"
+description = "A simple secret/credential scanner for source code repositories."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }         
+authors = [
+  { name = "Your Name", email = "you@example.com" }
+]
+keywords = ["security", "secrets", "credentials", "scanner"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Topic :: Security",
+]
+
+dependencies = []                  # stdlib only right now
+
+[project.urls]
+Homepage = "https://github.com/harshahemanth/secret-scan"
+Repository = "https://github.com/harshahemanth/secret-scan"
+Issues = "https://github.com/harshahemanth/secret-scan/issues"
+Documentation = "https://github.com/harshahemanth/secret-scan#readme"
+
+[project.scripts]
+secret-scan = "secret_scanner.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
