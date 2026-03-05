@@ -1,0 +1,7 @@
+- id: secret-scan
+  name: secret-scan
+  entry: secret-scan
+  args: ['.', '--output', '/dev/null']
+  language: python
+  pass_filenames: false
+  always_run: true

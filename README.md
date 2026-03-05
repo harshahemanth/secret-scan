@@ -203,6 +203,16 @@ Add to `.pre-commit-config.yaml`:
 
 ```yaml
 repos:
+  - repo: https://github.com/harshahemanth/secret-scan
+    rev: v0.4.1
+    hooks:
+      - id: secret-scan
+```
+
+Or use a local install:
+
+```yaml
+repos:
   - repo: local
     hooks:
       - id: secret-scan
@@ -303,12 +313,13 @@ Example output:
       {
         "file": "config/settings.py",
         "line": 20,
-        "match": "AWS_ACCESS_KEY_ID=AKIA1234567890ABCD12",
+        "match": "AWS_****CD12",
         "rule_id": "aws-access-key-assignment",
         "rule_name": "AWS Access Key Assignment",
         "severity": "error",
         "column": 0,
-        "end_column": 42
+        "end_column": 42,
+        "fingerprint": "a1b2c3d4e5f6a7b8"
       }
     ]
 

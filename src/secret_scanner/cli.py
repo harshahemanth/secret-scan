@@ -9,7 +9,7 @@ from pathlib import Path
 from .scanner import scan_directory
 from .ignore import IgnoreRules
 from .redact import redact_matches
-from .baseline import load_baseline, save_baseline, filter_by_baseline
+from .baseline import load_baseline, save_baseline, filter_by_baseline, compute_fingerprint
 
 SEVERITY_LEVELS = ("error", "warning", "note")
 
@@ -186,6 +186,10 @@ def run(argv=None) -> int:
     # Save baseline (uses raw match text)
     if args.save_baseline:
         save_baseline(matches, Path(args.save_baseline), _get_version())
+
+    # Add fingerprint hashes (uses raw match text, before redaction)
+    for m in matches:
+        m["fingerprint"] = compute_fingerprint(m)
 
     print(f"Scan complete. {len(matches)} potential secret(s) found.", file=sys.stderr)
 

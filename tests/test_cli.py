@@ -59,6 +59,8 @@ class TestJsonOutput:
         assert "severity" in record
         assert "column" in record
         assert "end_column" in record
+        assert "fingerprint" in record
+        assert len(record["fingerprint"]) == 16
 
 
 # ── SARIF output ─────────────────────────────────────────────────────

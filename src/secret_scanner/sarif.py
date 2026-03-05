@@ -49,7 +49,7 @@ def _build_rule_index(patterns: list[SecretPattern]) -> dict[str, int]:
 def generate_sarif(
     matches: list[dict[str, Any]],
     root_path: str,
-    version: str = "0.4.0",
+    version: str = "0.4.1",
 ) -> dict[str, Any]:
     """Generate a SARIF v2.1.0 document from scan results."""
     patterns = get_patterns()
@@ -93,6 +93,7 @@ def generate_sarif(
             ],
             "fingerprints": {
                 "primaryLocationLineHash": f"{rel_path}:{match['line']}:{rule_id}",
+                "secret-scan/fingerprint": match.get("fingerprint", ""),
             },
         }
         results.append(result)
