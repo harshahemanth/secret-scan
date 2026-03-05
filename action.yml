@@ -1,4 +1,4 @@
-name: "secret-scan"
+name: "Secret Scan Action"
 description: "Scan source code for hardcoded secrets and credentials"
 author: "harshahemanth"
 
