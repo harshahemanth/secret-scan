@@ -107,3 +107,45 @@ class TestParseArgs:
         args = parse_args(["/some/path", "--skip-ext", ".log", "--skip-ext", ".tmp"])
         assert ".log" in args.skip_ext
         assert ".tmp" in args.skip_ext
+
+    def test_severity_flag(self):
+        args = parse_args(["/some/path", "--severity", "error"])
+        assert args.severity == "error"
+
+    def test_severity_default_none(self):
+        args = parse_args(["/some/path"])
+        assert args.severity is None
+
+    def test_version_flag(self):
+        with pytest.raises(SystemExit) as exc_info:
+            parse_args(["--version"])
+        assert exc_info.value.code == 0
+
+
+# ── Severity filter ─────────────────────────────────────────────────
+
+
+class TestSeverityFilter:
+    def test_severity_error_filters_warnings(self, tmp_path, capsys):
+        # password= is "warning", AKIA is "error"
+        _write_text(tmp_path / "test.txt", "password=supersecret123\nAKIA1234567890ABCDEF")
+        run([str(tmp_path), "--json", "--severity", "error", "--output", str(tmp_path / "out.txt")])
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        for record in data:
+            assert record["severity"] == "error"
+
+    def test_severity_warning_includes_warnings_and_errors(self, tmp_path, capsys):
+        _write_text(tmp_path / "test.txt", "password=supersecret123\nAKIA1234567890ABCDEF")
+        run([str(tmp_path), "--json", "--severity", "warning", "--output", str(tmp_path / "out.txt")])
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        severities = {r["severity"] for r in data}
+        assert "note" not in severities
+
+    def test_no_severity_returns_all(self, tmp_path, capsys):
+        _write_text(tmp_path / "test.txt", "password=supersecret123\nAKIA1234567890ABCDEF")
+        run([str(tmp_path), "--json", "--output", str(tmp_path / "out.txt")])
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert len(data) >= 2

@@ -3,8 +3,14 @@
 [![PyPI version](https://img.shields.io/pypi/v/secret-scan)](https://pypi.org/project/secret-scan/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/secret-scan)](https://pypi.org/project/secret-scan/)
 [![CI](https://github.com/harshahemanth/secret-scan/actions/workflows/ci.yml/badge.svg)](https://github.com/harshahemanth/secret-scan/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/pypi/pyversions/secret-scan)](https://pypi.org/project/secret-scan/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 A fast, lightweight CLI tool to detect secrets in source code. Zero dependencies — stdlib only.
+
+<!-- TODO: Replace with actual recording
+![demo](assets/demo.gif)
+-->
 
 `secret-scan` scans directories for sensitive data such as:
 
@@ -32,23 +38,113 @@ To upgrade:
 
     pip install --upgrade secret-scan
 
-## Basic Usage
+Check version:
 
-Scan the current directory:
+    secret-scan --version
 
-    secret-scan .
+## Quick Start
 
-Scan a specific directory:
+```bash
+# Scan current directory
+secret-scan .
 
-    secret-scan ~/projects/my-repo
+# Only show high-confidence findings
+secret-scan . --severity error
 
-Write results to a file (default: docsCred.txt):
+# JSON output for scripting
+secret-scan . --json
 
-    secret-scan . --output secrets.txt
+# SARIF output for GitHub/GitLab integration
+secret-scan . --sarif > results.sarif
+
+# Advisory mode (always exit 0)
+secret-scan . --no-fail
+```
+
+## CI/CD Integration
+
+### GitHub Actions
+
+Add this to `.github/workflows/secret-scan.yml`:
+
+```yaml
+name: Secret Scan
+
+on: [push, pull_request]
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install secret-scan
+        run: pip install secret-scan
+
+      - name: Scan for secrets
+        run: secret-scan . --output /dev/null
+```
+
+The scanner exits with code 1 if secrets are found, which will fail the workflow.
+
+### GitHub Actions with SARIF (Code Scanning)
+
+Upload results to GitHub's Security tab:
+
+```yaml
+name: Secret Scan
+
+on: [push, pull_request]
+
+permissions:
+  security-events: write
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install secret-scan
+        run: pip install secret-scan
+
+      - name: Scan for secrets
+        run: secret-scan . --sarif --no-fail --output /dev/null > results.sarif
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+```
+
+### GitLab CI
+
+```yaml
+secret-scan:
+  image: python:3.12-slim
+  script:
+    - pip install secret-scan
+    - secret-scan . --output /dev/null
+```
+
+### Pre-commit Hook
+
+Add to `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: secret-scan
+        name: secret-scan
+        entry: secret-scan
+        args: ['.', '--output', '/dev/null']
+        language: python
+        additional_dependencies: ['secret-scan']
+        pass_filenames: false
+```
 
 ## Exit Codes
-
-`secret-scan` returns meaningful exit codes for CI/CD integration:
 
 | Exit Code | Meaning              |
 |-----------|----------------------|
@@ -58,6 +154,18 @@ Write results to a file (default: docsCred.txt):
 Use `--no-fail` to always exit with 0 (advisory mode):
 
     secret-scan . --no-fail
+
+## Severity Filter
+
+Each finding has a severity: `error` (high confidence), `warning` (medium), or `note` (low).
+
+Filter to only show high-confidence findings:
+
+    secret-scan . --severity error
+
+Show errors and warnings (exclude notes):
+
+    secret-scan . --severity warning
 
 ## JSON Output
 
@@ -85,12 +193,6 @@ Example output:
 Generate SARIF v2.1.0 output for integration with GitHub Code Scanning, GitLab SAST, and other security tools:
 
     secret-scan . --sarif
-
-Upload to GitHub Code Scanning:
-
-    secret-scan . --sarif > results.sarif
-    gh api repos/{owner}/{repo}/code-scanning/sarifs \
-      -X POST -F "sarif=@results.sarif"
 
 ## Suppressing False Positives
 
@@ -122,20 +224,18 @@ Use `--no-ignore` to bypass all suppression rules:
 
 ## Command-Line Options
 
-| Flag              | Description                                      |
-|-------------------|--------------------------------------------------|
-| --output \<file\> | Save text results (default: docsCred.txt)        |
-| --skip-ext .log   | Skip specific file extensions                    |
-| --skip-dir \<dir\>| Skip specific directories                        |
-| --max-size-mb N   | Scan only files smaller than N MB                |
-| --json            | Print JSON results to stdout                     |
-| --sarif           | Print SARIF v2.1.0 results to stdout             |
-| --no-fail         | Always exit 0 even if secrets are found          |
-| --no-ignore       | Do not read .secretscanignore file               |
-
-Example:
-
-    secret-scan . --skip-ext .log --skip-dir build --json
+| Flag                 | Description                                      |
+|----------------------|--------------------------------------------------|
+| -v, --version        | Show version and exit                            |
+| -o, --output \<file\>| Save text results (default: docsCred.txt)        |
+| --skip-ext .log      | Skip specific file extensions                    |
+| --skip-dir \<dir\>   | Skip specific directories                        |
+| --max-size-mb N      | Scan only files smaller than N MB                |
+| --severity \<level\> | Minimum severity: error, warning, or note        |
+| --json               | Print JSON results to stdout                     |
+| --sarif              | Print SARIF v2.1.0 results to stdout             |
+| --no-fail            | Always exit 0 even if secrets are found          |
+| --no-ignore          | Do not read .secretscanignore file               |
 
 ## What It Detects
 
@@ -196,8 +296,6 @@ Detection patterns are defined as `SecretPattern` dataclass instances in:
 Each pattern has a `rule_id`, `name`, `severity`, `pattern` (regex), and `description`. You can add new patterns by appending to the `PATTERNS` list.
 
 ## Programmatic Usage
-
-Example using the Python API:
 
 ```python
 from pathlib import Path

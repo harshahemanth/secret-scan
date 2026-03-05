@@ -3,15 +3,30 @@
 import argparse
 import json
 import sys
+from importlib.metadata import version as pkg_version
 from pathlib import Path
 
 from .scanner import scan_directory
 from .ignore import IgnoreRules
 
+SEVERITY_LEVELS = ("error", "warning", "note")
+
+
+def _get_version() -> str:
+    try:
+        return pkg_version("secret-scan")
+    except Exception:
+        return "dev"
+
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(
         description="Scan a directory for potential credentials/secrets."
+    )
+    parser.add_argument(
+        "-v", "--version",
+        action="version",
+        version=f"secret-scan {_get_version()}",
     )
     parser.add_argument(
         "path",
@@ -43,6 +58,13 @@ def parse_args(argv=None):
         help="Additional file extension to skip (e.g. .log). "
              "Can be passed multiple times.",
     )
+    parser.add_argument(
+        "--severity",
+        choices=SEVERITY_LEVELS,
+        default=None,
+        help="Only report findings at this severity level or higher. "
+             "Levels from highest to lowest: error, warning, note.",
+    )
 
     output_group = parser.add_mutually_exclusive_group()
     output_group.add_argument(
@@ -67,6 +89,12 @@ def parse_args(argv=None):
         help="Do not read .secretscanignore file.",
     )
     return parser.parse_args(argv)
+
+
+def _filter_by_severity(matches: list, min_severity: str) -> list:
+    """Filter matches to only include findings at or above the given severity."""
+    threshold = SEVERITY_LEVELS.index(min_severity)
+    return [m for m in matches if SEVERITY_LEVELS.index(m.get("severity", "warning")) <= threshold]
 
 
 def run(argv=None) -> int:
@@ -99,6 +127,10 @@ def run(argv=None) -> int:
         max_file_size_bytes=max_bytes,
         ignore_rules=ignore_rules,
     )
+
+    # Apply severity filter if specified
+    if args.severity:
+        matches = _filter_by_severity(matches, args.severity)
 
     print(f"Scan complete. {len(matches)} potential secret(s) found.", file=sys.stderr)
 

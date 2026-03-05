@@ -4,13 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "secret-scan"          
-version = "0.2.0"
+version = "0.2.1"
 description = "A simple secret/credential scanner for source code repositories."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { file = "LICENSE" }         
 authors = [
-  { name = "Your Name", email = "you@example.com" }
+  { name = "harshahemanth", email = "22571344+harshahemanth@users.noreply.github.com" },
+  { name = "A-myth", email = "38597336+A-myth@users.noreply.github.com" }
 ]
 keywords = ["security", "secrets", "credentials", "scanner"]
 classifiers = [
