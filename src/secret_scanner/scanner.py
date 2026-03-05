@@ -6,6 +6,7 @@ import re
 from typing import Optional, Set
 
 from .patterns import build_pattern, compile_patterns
+from .entropy import scan_line_entropy
 from .ignore import parse_ignorefile, line_has_nosecret_marker, IgnoreRules
 
 DEFAULT_SKIP_DIRS = {
@@ -43,6 +44,7 @@ def scan_directory(
     max_file_size_bytes: Optional[int] = 5 * 1024 * 1024,
     pattern: Optional[re.Pattern] = None,
     ignore_rules: Optional[IgnoreRules] = None,
+    entropy: bool = False,
 ):
     """
     Walks root_path, skips junk dirs/exts/binary/large files,
@@ -172,6 +174,23 @@ def scan_directory(
                                         if cred_file_ctx is not None:
                                             cred_file_ctx.write(
                                                 f"{file_path}:{lineno} | {record['match']}\n"
+                                            )
+
+                                # Entropy-based detection (opt-in)
+                                if entropy:
+                                    for ent_record in scan_line_entropy(line, str(file_path), lineno):
+                                        ent_span = (ent_record["column"], ent_record["end_column"])
+                                        if ent_span in seen_spans:
+                                            continue
+                                        seen_spans.add(ent_span)
+                                        if ignore_rules.should_ignore_match(
+                                            rel_path, ent_record["rule_id"], ent_record["match"]
+                                        ):
+                                            continue
+                                        matches_found.append(ent_record)
+                                        if cred_file_ctx is not None:
+                                            cred_file_ctx.write(
+                                                f"{file_path}:{lineno} | {ent_record['match']}\n"
                                             )
                 except Exception as e:
                     print(f"Error reading file {file_path}: {e}")

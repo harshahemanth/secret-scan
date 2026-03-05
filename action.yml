@@ -1,0 +1,103 @@
+name: "secret-scan"
+description: "Scan source code for hardcoded secrets and credentials"
+author: "harshahemanth"
+
+branding:
+  icon: "shield"
+  color: "red"
+
+inputs:
+  path:
+    description: "Directory to scan"
+    required: false
+    default: "."
+  severity:
+    description: "Minimum severity level: error, warning, or note"
+    required: false
+    default: ""
+  sarif:
+    description: "Output results in SARIF format"
+    required: false
+    default: "false"
+  no-fail:
+    description: "Always exit 0 even if secrets are found (advisory mode)"
+    required: false
+    default: "false"
+  entropy:
+    description: "Enable entropy-based detection for high-entropy strings"
+    required: false
+    default: "false"
+  extra-args:
+    description: "Additional CLI arguments to pass to secret-scan"
+    required: false
+    default: ""
+
+outputs:
+  sarif-file:
+    description: "Path to SARIF results file (only set when sarif=true)"
+    value: ${{ steps.scan.outputs.sarif-file }}
+  exit-code:
+    description: "Exit code from secret-scan (0=clean, 1=secrets found)"
+    value: ${{ steps.scan.outputs.exit-code }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ">=3.9"
+
+    - name: Install secret-scan
+      shell: bash
+      run: pip install "${{ github.action_path }}"
+
+    - name: Run secret-scan
+      id: scan
+      shell: bash
+      run: |
+        args="${{ inputs.path }}"
+        args="$args --output /dev/null"
+
+        if [ -n "${{ inputs.severity }}" ]; then
+          args="$args --severity ${{ inputs.severity }}"
+        fi
+
+        if [ "${{ inputs.entropy }}" = "true" ]; then
+          args="$args --entropy"
+        fi
+
+        if [ "${{ inputs.no-fail }}" = "true" ]; then
+          args="$args --no-fail"
+        fi
+
+        if [ "${{ inputs.sarif }}" = "true" ]; then
+          args="$args --sarif"
+          SARIF_FILE="${{ runner.temp }}/secret-scan-results.sarif"
+          args="$args ${{ inputs.extra-args }}"
+
+          set +e
+          secret-scan $args > "$SARIF_FILE"
+          EXIT_CODE=$?
+          set -e
+
+          echo "sarif-file=$SARIF_FILE" >> "$GITHUB_OUTPUT"
+          echo "exit-code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ inputs.no-fail }}" != "true" ] && [ "$EXIT_CODE" -ne 0 ]; then
+            exit $EXIT_CODE
+          fi
+        else
+          args="$args ${{ inputs.extra-args }}"
+
+          set +e
+          secret-scan $args
+          EXIT_CODE=$?
+          set -e
+
+          echo "exit-code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ inputs.no-fail }}" != "true" ] && [ "$EXIT_CODE" -ne 0 ]; then
+            exit $EXIT_CODE
+          fi
+        fi

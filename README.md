@@ -61,9 +61,74 @@ secret-scan . --sarif > results.sarif
 secret-scan . --no-fail
 ```
 
+## GitHub Action (Marketplace)
+
+The easiest way to add secret scanning to your CI — no pip install needed:
+
+```yaml
+name: Secret Scan
+
+on: [push, pull_request]
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: harshahemanth/secret-scan@v1
+```
+
+### SARIF + Code Scanning
+
+Upload results to GitHub's Security tab:
+
+```yaml
+name: Secret Scan
+
+on: [push, pull_request]
+
+permissions:
+  security-events: write
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: harshahemanth/secret-scan@v1
+        id: scan
+        with:
+          sarif: "true"
+          no-fail: "true"
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ steps.scan.outputs.sarif-file }}
+```
+
+### Action Inputs
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `path` | Directory to scan | `.` |
+| `severity` | Minimum severity: error, warning, or note | (all) |
+| `sarif` | Output SARIF format | `false` |
+| `no-fail` | Always exit 0 (advisory mode) | `false` |
+| `entropy` | Enable entropy-based detection | `false` |
+| `extra-args` | Additional CLI arguments | |
+
+### Action Outputs
+
+| Output | Description |
+|--------|-------------|
+| `sarif-file` | Path to SARIF file (when `sarif=true`) |
+| `exit-code` | Scanner exit code (0=clean, 1=secrets found) |
+
 ## CI/CD Integration
 
-### GitHub Actions
+### GitHub Actions (manual install)
 
 Add this to `.github/workflows/secret-scan.yml`:
 
@@ -236,6 +301,7 @@ Use `--no-ignore` to bypass all suppression rules:
 | --sarif              | Print SARIF v2.1.0 results to stdout             |
 | --no-fail            | Always exit 0 even if secrets are found          |
 | --no-ignore          | Do not read .secretscanignore file               |
+| --entropy            | Enable entropy-based detection (opt-in)          |
 
 ## What It Detects
 
@@ -274,6 +340,35 @@ Each detection rule has a unique `rule_id` and a severity level (`error`, `warni
 | SSH RSA public keys | note |
 | Database connection strings | warning |
 | Generic secret assignments | warning |
+
+## Entropy-Based Detection
+
+Use `--entropy` to detect high-entropy hex and base64 strings that don't match any known pattern. This catches secrets that slip through regex-based rules.
+
+```bash
+secret-scan . --entropy
+secret-scan . --entropy --json
+```
+
+This is **opt-in** to avoid false positive noise. When enabled, the scanner tokenizes each line and computes Shannon entropy for candidate strings.
+
+**Thresholds:**
+
+| Type | Min Length | Entropy Threshold |
+|------|-----------|-------------------|
+| Hex strings | 20 chars | 3.0 bits/char |
+| Base64 strings | 20 chars | 4.5 bits/char |
+
+**Automatically excluded (false positive filters):**
+
+- UUIDs (`550e8400-e29b-41d4-a716-446655440000`)
+- CSS hex colors (`#1a2b3c`)
+- Version strings (`v1.2.3...`)
+- Lockfile hashes (`sha256-...`, `sha512-...`)
+- Repeated characters (`AAAAAA...`)
+- Entire lockfiles (`package-lock.json`, `yarn.lock`, etc.)
+
+Entropy findings use rule IDs `high-entropy-hex` and `high-entropy-base64`, both at severity `warning`. They respect `# nosecret` inline suppression and `.secretscanignore` rules.
 
 ## Automatic Skips
 
