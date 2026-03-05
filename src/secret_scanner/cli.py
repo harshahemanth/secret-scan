@@ -88,6 +88,11 @@ def parse_args(argv=None):
         action="store_true",
         help="Do not read .secretscanignore file.",
     )
+    parser.add_argument(
+        "--entropy",
+        action="store_true",
+        help="Enable entropy-based detection for high-entropy hex/base64 strings.",
+    )
     return parser.parse_args(argv)
 
 
@@ -126,6 +131,7 @@ def run(argv=None) -> int:
         skip_exts=extra_exts,
         max_file_size_bytes=max_bytes,
         ignore_rules=ignore_rules,
+        entropy=args.entropy,
     )
 
     # Apply severity filter if specified

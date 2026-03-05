@@ -337,6 +337,22 @@ PATTERNS: list[SecretPattern] = [
         pattern=r'sk-[A-Za-z0-9]{20,}',
         description="OpenAI API key starting with sk-.",
     ),
+
+    # ── Entropy-based detection (metadata-only, never-matching regex) ──
+    SecretPattern(
+        rule_id="high-entropy-hex",
+        name="High Entropy Hex String",
+        severity="warning",
+        pattern=r'(?!x)x',
+        description="High-entropy hexadecimal string detected via Shannon entropy analysis.",
+    ),
+    SecretPattern(
+        rule_id="high-entropy-base64",
+        name="High Entropy Base64 String",
+        severity="warning",
+        pattern=r'(?!x)x',
+        description="High-entropy base64 string detected via Shannon entropy analysis.",
+    ),
 ]
 
 

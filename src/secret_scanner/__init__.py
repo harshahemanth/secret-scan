@@ -2,6 +2,7 @@
 
 from .scanner import scan_directory, DEFAULT_SKIP_DIRS, DEFAULT_SKIP_EXTS
 from .patterns import build_pattern, get_patterns, compile_patterns, SecretPattern
+from .entropy import scan_line_entropy, shannon_entropy
 
 __all__ = [
     "scan_directory",
@@ -11,4 +12,6 @@ __all__ = [
     "get_patterns",
     "compile_patterns",
     "SecretPattern",
+    "scan_line_entropy",
+    "shannon_entropy",
 ]
