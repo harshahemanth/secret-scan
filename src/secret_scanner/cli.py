@@ -8,6 +8,8 @@ from pathlib import Path
 
 from .scanner import scan_directory
 from .ignore import IgnoreRules
+from .redact import redact_matches
+from .baseline import load_baseline, save_baseline, filter_by_baseline
 
 SEVERITY_LEVELS = ("error", "warning", "note")
 
@@ -93,6 +95,29 @@ def parse_args(argv=None):
         action="store_true",
         help="Enable entropy-based detection for high-entropy hex/base64 strings.",
     )
+    parser.add_argument(
+        "--no-redact",
+        action="store_true",
+        help="Show full secret values in output (by default, secrets are redacted).",
+    )
+    parser.add_argument(
+        "--baseline",
+        metavar="FILE",
+        default=None,
+        help="Path to a baseline file. Known findings are suppressed from results.",
+    )
+    parser.add_argument(
+        "--save-baseline",
+        metavar="FILE",
+        default=None,
+        help="Save current findings as a baseline file for future scans.",
+    )
+    parser.add_argument(
+        "--diff",
+        metavar="REF",
+        default=None,
+        help="Only scan files changed since the given git ref (e.g. main, HEAD~3).",
+    )
     return parser.parse_args(argv)
 
 
@@ -103,7 +128,7 @@ def _filter_by_severity(matches: list, min_severity: str) -> list:
 
 
 def run(argv=None) -> int:
-    """Run the scanner and return an exit code (0 = clean, 1 = secrets found)."""
+    """Run the scanner and return an exit code (0 = clean, 1 = secrets found, 2 = git error)."""
     args = parse_args(argv)
 
     root = Path(args.path).expanduser()
@@ -120,6 +145,19 @@ def run(argv=None) -> int:
     # If --no-ignore, pass empty rules to bypass auto-loading
     ignore_rules = IgnoreRules() if args.no_ignore else None
 
+    # Diff mode: resolve changed files
+    only_files = None
+    if args.diff is not None:
+        from .git import get_changed_files, get_repo_root, GitError
+        try:
+            repo_root = get_repo_root(root)
+            only_files = set(get_changed_files(args.diff, repo_root))
+        except GitError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 2
+
+    redact = not args.no_redact
+
     print(f"Scanning directory: {root}", file=sys.stderr)
     if output is not None:
         print(f"Writing text results to: {output}", file=sys.stderr)
@@ -132,21 +170,35 @@ def run(argv=None) -> int:
         max_file_size_bytes=max_bytes,
         ignore_rules=ignore_rules,
         entropy=args.entropy,
+        redact=redact,
+        only_files=only_files,
     )
 
     # Apply severity filter if specified
     if args.severity:
         matches = _filter_by_severity(matches, args.severity)
 
+    # Baseline filter (uses raw match text for fingerprints)
+    if args.baseline:
+        baseline_fps = load_baseline(Path(args.baseline))
+        matches = filter_by_baseline(matches, baseline_fps)
+
+    # Save baseline (uses raw match text)
+    if args.save_baseline:
+        save_baseline(matches, Path(args.save_baseline), _get_version())
+
     print(f"Scan complete. {len(matches)} potential secret(s) found.", file=sys.stderr)
+
+    # Redaction + output (display layer)
+    display_matches = matches if not redact else redact_matches(matches)
 
     if args.sarif:
         from .sarif import generate_sarif, sarif_to_json
-        sarif_doc = generate_sarif(matches, str(root.resolve()))
+        sarif_doc = generate_sarif(display_matches, str(root.resolve()))
         sys.stdout.write(sarif_to_json(sarif_doc))
         print()
     elif args.json:
-        json.dump(matches, sys.stdout, indent=2)
+        json.dump(display_matches, sys.stdout, indent=2)
         print()
 
     if matches and not args.no_fail:

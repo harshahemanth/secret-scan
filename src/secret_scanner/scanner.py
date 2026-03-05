@@ -8,6 +8,7 @@ from typing import Optional, Set
 from .patterns import build_pattern, compile_patterns
 from .entropy import scan_line_entropy
 from .ignore import parse_ignorefile, line_has_nosecret_marker, IgnoreRules
+from .redact import redact_match
 
 DEFAULT_SKIP_DIRS = {
     ".git", ".hg", ".svn",
@@ -45,6 +46,8 @@ def scan_directory(
     pattern: Optional[re.Pattern] = None,
     ignore_rules: Optional[IgnoreRules] = None,
     entropy: bool = False,
+    redact: bool = True,
+    only_files: Optional[Set[str]] = None,
 ):
     """
     Walks root_path, skips junk dirs/exts/binary/large files,
@@ -94,6 +97,10 @@ def scan_directory(
             for filename in filenames:
                 file_path = Path(current_root) / filename
 
+                # Diff-mode: only scan specified files
+                if only_files is not None and str(file_path.resolve()) not in only_files:
+                    continue
+
                 ext = (
                     "." + file_path.name.split(".")[-1].lower()
                     if "." in file_path.name
@@ -138,8 +145,9 @@ def scan_directory(
                                     }
                                     matches_found.append(record)
                                     if cred_file_ctx is not None:
+                                        display = redact_match(m.group(0)) if redact else m.group(0)
                                         cred_file_ctx.write(
-                                            f"{file_path}:{lineno} | {m.group(0)}\n"
+                                            f"{file_path}:{lineno} | {display}\n"
                                         )
                             else:
                                 # Named-pattern mode with dedup
@@ -172,8 +180,9 @@ def scan_directory(
 
                                         matches_found.append(record)
                                         if cred_file_ctx is not None:
+                                            display = redact_match(record['match']) if redact else record['match']
                                             cred_file_ctx.write(
-                                                f"{file_path}:{lineno} | {record['match']}\n"
+                                                f"{file_path}:{lineno} | {display}\n"
                                             )
 
                                 # Entropy-based detection (opt-in)
@@ -189,8 +198,9 @@ def scan_directory(
                                             continue
                                         matches_found.append(ent_record)
                                         if cred_file_ctx is not None:
+                                            display = redact_match(ent_record['match']) if redact else ent_record['match']
                                             cred_file_ctx.write(
-                                                f"{file_path}:{lineno} | {ent_record['match']}\n"
+                                                f"{file_path}:{lineno} | {display}\n"
                                             )
                 except Exception as e:
                     print(f"Error reading file {file_path}: {e}")

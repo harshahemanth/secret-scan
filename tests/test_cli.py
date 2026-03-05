@@ -149,3 +149,86 @@ class TestSeverityFilter:
         captured = capsys.readouterr()
         data = json.loads(captured.out)
         assert len(data) >= 2
+
+
+# ── Redaction ──────────────────────────────────────────────────────
+
+
+class TestRedaction:
+    def test_json_output_redacted_by_default(self, tmp_path, capsys):
+        _write_text(tmp_path / "test.txt", "AKIA1234567890ABCDEF")
+        run([str(tmp_path), "--json", "--output", str(tmp_path / "out.txt")])
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert len(data) >= 1
+        # Must not contain the full key
+        assert "AKIA1234567890ABCDEF" not in data[0]["match"]
+        assert "****" in data[0]["match"]
+
+    def test_no_redact_shows_full_value(self, tmp_path, capsys):
+        _write_text(tmp_path / "test.txt", "AKIA1234567890ABCDEF")
+        run([str(tmp_path), "--json", "--no-redact", "--output", str(tmp_path / "out.txt")])
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert "AKIA1234567890ABCDEF" in data[0]["match"]
+
+    def test_no_redact_flag_parsed(self):
+        args = parse_args(["/some/path", "--no-redact"])
+        assert args.no_redact
+
+    def test_redact_default_false(self):
+        args = parse_args(["/some/path"])
+        assert not args.no_redact
+
+
+# ── Baseline ───────────────────────────────────────────────────────
+
+
+class TestBaselineCLI:
+    def test_save_baseline_creates_file(self, tmp_path):
+        _write_text(tmp_path / "test.txt", "AKIA1234567890ABCDEF")
+        baseline_path = tmp_path / "baseline.json"
+        run([str(tmp_path), "--save-baseline", str(baseline_path), "--output", str(tmp_path / "out.txt")])
+        assert baseline_path.exists()
+        data = json.loads(baseline_path.read_text())
+        assert "findings" in data
+        assert len(data["findings"]) >= 1
+
+    def test_baseline_suppresses_known(self, tmp_path, capsys):
+        _write_text(tmp_path / "test.txt", "AKIA1234567890ABCDEF")
+        baseline_path = tmp_path / "baseline.json"
+        # Save baseline
+        run([str(tmp_path), "--save-baseline", str(baseline_path), "--output", str(tmp_path / "out.txt")])
+        # Scan with baseline — known finding suppressed
+        code = run([str(tmp_path), "--json", "--baseline", str(baseline_path), "--output", str(tmp_path / "out2.txt")])
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert len(data) == 0
+        assert code == 0
+
+    def test_baseline_flag_parsed(self):
+        args = parse_args(["/some/path", "--baseline", "file.json"])
+        assert args.baseline == "file.json"
+
+    def test_save_baseline_flag_parsed(self):
+        args = parse_args(["/some/path", "--save-baseline", "file.json"])
+        assert args.save_baseline == "file.json"
+
+
+# ── Diff mode ──────────────────────────────────────────────────────
+
+
+class TestDiffCLI:
+    def test_diff_flag_parsed(self):
+        args = parse_args(["/some/path", "--diff", "main"])
+        assert args.diff == "main"
+
+    def test_diff_default_none(self):
+        args = parse_args(["/some/path"])
+        assert args.diff is None
+
+    def test_diff_git_error_returns_2(self, tmp_path):
+        """Diff mode in a non-git directory should return exit code 2."""
+        _write_text(tmp_path / "test.txt", "nothing here")
+        code = run([str(tmp_path), "--diff", "main", "--output", str(tmp_path / "out.txt")])
+        assert code == 2

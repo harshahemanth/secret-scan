@@ -27,6 +27,22 @@ inputs:
     description: "Enable entropy-based detection for high-entropy strings"
     required: false
     default: "false"
+  no-redact:
+    description: "Show full secret values in output (by default, secrets are redacted)"
+    required: false
+    default: "false"
+  baseline:
+    description: "Path to a baseline file to suppress known findings"
+    required: false
+    default: ""
+  save-baseline:
+    description: "Save current findings as a baseline file"
+    required: false
+    default: ""
+  diff:
+    description: "Only scan files changed since this git ref (e.g. main, HEAD~3)"
+    required: false
+    default: ""
   extra-args:
     description: "Additional CLI arguments to pass to secret-scan"
     required: false
@@ -69,6 +85,22 @@ runs:
 
         if [ "${{ inputs.no-fail }}" = "true" ]; then
           args="$args --no-fail"
+        fi
+
+        if [ "${{ inputs.no-redact }}" = "true" ]; then
+          args="$args --no-redact"
+        fi
+
+        if [ -n "${{ inputs.baseline }}" ]; then
+          args="$args --baseline ${{ inputs.baseline }}"
+        fi
+
+        if [ -n "${{ inputs.save-baseline }}" ]; then
+          args="$args --save-baseline ${{ inputs.save-baseline }}"
+        fi
+
+        if [ -n "${{ inputs.diff }}" ]; then
+          args="$args --diff ${{ inputs.diff }}"
         fi
 
         if [ "${{ inputs.sarif }}" = "true" ]; then

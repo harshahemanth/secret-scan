@@ -117,6 +117,10 @@ jobs:
 | `sarif` | Output SARIF format | `false` |
 | `no-fail` | Always exit 0 (advisory mode) | `false` |
 | `entropy` | Enable entropy-based detection | `false` |
+| `no-redact` | Show full secret values in output | `false` |
+| `baseline` | Path to baseline file to suppress known findings | |
+| `save-baseline` | Save findings as a baseline file | |
+| `diff` | Only scan files changed since this git ref | |
 | `extra-args` | Additional CLI arguments | |
 
 ### Action Outputs
@@ -124,7 +128,7 @@ jobs:
 | Output | Description |
 |--------|-------------|
 | `sarif-file` | Path to SARIF file (when `sarif=true`) |
-| `exit-code` | Scanner exit code (0=clean, 1=secrets found) |
+| `exit-code` | Scanner exit code (0=clean, 1=secrets found, 2=git error) |
 
 ## CI/CD Integration
 
@@ -209,12 +213,66 @@ repos:
         pass_filenames: false
 ```
 
+## Redaction
+
+By default, secret values are masked in all output (JSON, SARIF, text file) to prevent credential leaks in CI logs. Use `--no-redact` to show full values:
+
+```bash
+# Default: secrets are redacted
+secret-scan . --json
+# Output: "match": "AKIA****CDEF"
+
+# Show full values
+secret-scan . --json --no-redact
+# Output: "match": "AKIA1234567890ABCDEF"
+```
+
+Redaction rules:
+- 8 chars or less: `****`
+- 9-11 chars: first 2 + `****` + last 2
+- 12+ chars: first 4 + `****` + last 4
+
+## Baseline
+
+Save known findings to a baseline file and suppress them in future scans. This enables incremental adoption — acknowledge existing secrets and only fail on new ones:
+
+```bash
+# Save current findings as baseline
+secret-scan . --save-baseline .baseline.json
+
+# Future scans suppress known findings
+secret-scan . --baseline .baseline.json
+
+# Combine with other flags
+secret-scan . --baseline .baseline.json --severity error --json
+```
+
+The baseline uses position-independent fingerprints (rule ID + match text), so findings are still suppressed even if they move to different lines or files.
+
+## Diff Mode
+
+Only scan files changed since a git ref — ideal for fast CI on pull requests:
+
+```bash
+# Scan only files changed vs main
+secret-scan . --diff main
+
+# Scan changes in last 3 commits
+secret-scan . --diff HEAD~3
+
+# Combine with baseline for incremental PR scanning
+secret-scan . --diff main --baseline .baseline.json --json
+```
+
+Exit code `2` indicates a git error (not a repo, invalid ref, git not installed).
+
 ## Exit Codes
 
 | Exit Code | Meaning              |
 |-----------|----------------------|
 | 0         | No secrets found     |
 | 1         | Secrets were found   |
+| 2         | Git error (diff mode)|
 
 Use `--no-fail` to always exit with 0 (advisory mode):
 
@@ -289,19 +347,23 @@ Use `--no-ignore` to bypass all suppression rules:
 
 ## Command-Line Options
 
-| Flag                 | Description                                      |
-|----------------------|--------------------------------------------------|
-| -v, --version        | Show version and exit                            |
-| -o, --output \<file\>| Save text results (default: docsCred.txt)        |
-| --skip-ext .log      | Skip specific file extensions                    |
-| --skip-dir \<dir\>   | Skip specific directories                        |
-| --max-size-mb N      | Scan only files smaller than N MB                |
-| --severity \<level\> | Minimum severity: error, warning, or note        |
-| --json               | Print JSON results to stdout                     |
-| --sarif              | Print SARIF v2.1.0 results to stdout             |
-| --no-fail            | Always exit 0 even if secrets are found          |
-| --no-ignore          | Do not read .secretscanignore file               |
-| --entropy            | Enable entropy-based detection (opt-in)          |
+| Flag                        | Description                                      |
+|-----------------------------|--------------------------------------------------|
+| -v, --version               | Show version and exit                            |
+| -o, --output \<file\>       | Save text results (default: docsCred.txt)        |
+| --skip-ext .log             | Skip specific file extensions                    |
+| --skip-dir \<dir\>          | Skip specific directories                        |
+| --max-size-mb N             | Scan only files smaller than N MB                |
+| --severity \<level\>        | Minimum severity: error, warning, or note        |
+| --json                      | Print JSON results to stdout                     |
+| --sarif                     | Print SARIF v2.1.0 results to stdout             |
+| --no-fail                   | Always exit 0 even if secrets are found          |
+| --no-ignore                 | Do not read .secretscanignore file               |
+| --entropy                   | Enable entropy-based detection (opt-in)          |
+| --no-redact                 | Show full secret values in output                |
+| --baseline \<file\>         | Suppress findings matching a baseline file       |
+| --save-baseline \<file\>    | Save current findings as a baseline file         |
+| --diff \<ref\>              | Only scan files changed since a git ref          |
 
 ## What It Detects
 
