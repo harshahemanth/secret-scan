@@ -5,6 +5,7 @@
 [![CI](https://github.com/harshahemanth/secret-scan/actions/workflows/ci.yml/badge.svg)](https://github.com/harshahemanth/secret-scan/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/pypi/pyversions/secret-scan)](https://pypi.org/project/secret-scan/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Secret%20Scan-blue?logo=github)](https://github.com/marketplace/actions/secret-scan-action)
 
 A fast, lightweight CLI tool to detect secrets in source code. Zero dependencies — stdlib only.
 
