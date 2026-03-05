@@ -1,19 +1,28 @@
 # secret-scan
 
-A fast, lightweight CLI tool to detect secrets in source code.
+[![PyPI version](https://img.shields.io/pypi/v/secret-scan)](https://pypi.org/project/secret-scan/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/secret-scan)](https://pypi.org/project/secret-scan/)
+[![CI](https://github.com/harshahemanth/secret-scan/actions/workflows/ci.yml/badge.svg)](https://github.com/harshahemanth/secret-scan/actions/workflows/ci.yml)
+
+A fast, lightweight CLI tool to detect secrets in source code. Zero dependencies — stdlib only.
 
 `secret-scan` scans directories for sensitive data such as:
 
 - AWS Access Keys and Secret Keys
-- OpenAI API keys (sk-...)
-- Password assignments
-- Bearer tokens
-- SSH private keys
+- GitHub tokens (PAT, OAuth, App, fine-grained)
+- Slack tokens (bot, user)
+- Stripe keys (live and test)
+- Google API keys
+- OpenAI API keys
+- npm and PyPI tokens
+- Twilio and SendGrid API keys
+- Heroku and HashiCorp Vault tokens
+- Passwords, Bearer tokens, and JWTs
+- SSH/RSA/PGP private keys
 - Azure storage keys
-- Generic API keys and tokens
-- JWT tokens
+- Database connection strings
 
-It skips binary files, ignores common junk directories (node_modules, .git, venv, etc.), avoids scanning large files, and supports extensible regular expressions.
+It skips binary files, ignores common junk directories (node_modules, .git, venv, etc.), avoids scanning large files, and supports extensible detection rules.
 
 ## Installation
 
@@ -37,6 +46,19 @@ Write results to a file (default: docsCred.txt):
 
     secret-scan . --output secrets.txt
 
+## Exit Codes
+
+`secret-scan` returns meaningful exit codes for CI/CD integration:
+
+| Exit Code | Meaning              |
+|-----------|----------------------|
+| 0         | No secrets found     |
+| 1         | Secrets were found   |
+
+Use `--no-fail` to always exit with 0 (advisory mode):
+
+    secret-scan . --no-fail
+
 ## JSON Output
 
 Generate JSON output (useful for CI pipelines):
@@ -49,24 +71,67 @@ Example output:
       {
         "file": "config/settings.py",
         "line": 20,
-        "match": "AWS_ACCESS_KEY_ID=AKIA1234567890ABCD12"
-      },
-      {
-        "file": "service/api.py",
-        "line": 42,
-        "match": "sk-ABCDEFGHIJKLMNOPQRSTUV123456"
+        "match": "AWS_ACCESS_KEY_ID=AKIA1234567890ABCD12",
+        "rule_id": "aws-access-key-assignment",
+        "rule_name": "AWS Access Key Assignment",
+        "severity": "error",
+        "column": 0,
+        "end_column": 42
       }
     ]
 
+## SARIF Output
+
+Generate SARIF v2.1.0 output for integration with GitHub Code Scanning, GitLab SAST, and other security tools:
+
+    secret-scan . --sarif
+
+Upload to GitHub Code Scanning:
+
+    secret-scan . --sarif > results.sarif
+    gh api repos/{owner}/{repo}/code-scanning/sarifs \
+      -X POST -F "sarif=@results.sarif"
+
+## Suppressing False Positives
+
+### .secretscanignore
+
+Create a `.secretscanignore` file in your project root to suppress known false positives:
+
+    # Ignore entire files or directories
+    tests/fixtures/*.json
+    docs/**
+
+    # Ignore a specific rule for a specific file
+    config/settings.py:generic-secret
+
+    # Ignore matches containing specific text
+    !match:EXAMPLE_KEY_DO_NOT_USE
+
+### Inline suppression
+
+Add `# nosecret` to any line to suppress detection on that line:
+
+```python
+DEFAULT_KEY = "sk-placeholder-not-real"  # nosecret
+```
+
+Use `--no-ignore` to bypass all suppression rules:
+
+    secret-scan . --no-ignore
+
 ## Command-Line Options
 
-| Flag              | Description                                |
-|------------------|--------------------------------------------|
-| --output <file>  | Save text results (default: docsCred.txt)   |
-| --skip-ext .log  | Skip specific file extensions               |
-| --skip-dir <dir> | Skip specific directories                   |
-| --max-size-mb N  | Scan only files smaller than N MB           |
-| --json           | Print JSON results to stdout                |
+| Flag              | Description                                      |
+|-------------------|--------------------------------------------------|
+| --output \<file\> | Save text results (default: docsCred.txt)        |
+| --skip-ext .log   | Skip specific file extensions                    |
+| --skip-dir \<dir\>| Skip specific directories                        |
+| --max-size-mb N   | Scan only files smaller than N MB                |
+| --json            | Print JSON results to stdout                     |
+| --sarif           | Print SARIF v2.1.0 results to stdout             |
+| --no-fail         | Always exit 0 even if secrets are found          |
+| --no-ignore       | Do not read .secretscanignore file               |
 
 Example:
 
@@ -74,26 +139,41 @@ Example:
 
 ## What It Detects
 
-### AWS
-- Access Key IDs (AKIA...)
-- Secret Access Keys
-- Environment variable forms such as AWS_ACCESS_KEY_ID=...
+Each detection rule has a unique `rule_id` and a severity level (`error`, `warning`, or `note`).
 
-### OpenAI
-- Keys beginning with sk-
+### Cloud Providers
+| Provider | What | Severity |
+|----------|------|----------|
+| AWS | Access Key IDs (AKIA...), Secret Access Keys | error |
+| Azure | Storage account keys, Account keys | error |
+| Google | API keys (AIza...) | error |
+| Heroku | API key assignments | error |
+| HashiCorp Vault | Service tokens (hvs.) | error |
 
-### Passwords and Tokens
-- password=...
-- api_key=...
-- Bearer tokens
-- JWT tokens (xxx.yyy.zzz)
+### SaaS / API Platforms
+| Provider | What | Severity |
+|----------|------|----------|
+| GitHub | PAT, OAuth, App, Refresh, Fine-grained tokens | error |
+| Slack | Bot tokens (xoxb-), User tokens (xoxp-) | error |
+| Stripe | Live secret/publishable/restricted keys | error/warning |
+| Stripe | Test keys | note |
+| OpenAI | API keys (sk-) | error |
+| Twilio | API keys (SK...) | error |
+| SendGrid | API keys (SG.) | error |
+| npm | Access tokens | error |
+| PyPI | API tokens | error |
 
-### Private Keys
-- -----BEGIN PRIVATE KEY-----
-
-### Cloud Provider Keys
-- Azure storage account keys
-- Redis/MySQL/Postgres/Mongo/FTP/SMTP connection strings
+### Generic Patterns
+| What | Severity |
+|------|----------|
+| Password assignments (password=, passwd=, pwd=) | warning |
+| Bearer tokens | error |
+| JWT tokens | warning |
+| API key/token assignments | warning |
+| Private key blocks (PEM headers) | error |
+| SSH RSA public keys | note |
+| Database connection strings | warning |
+| Generic secret assignments | warning |
 
 ## Automatic Skips
 
@@ -102,32 +182,35 @@ The scanner automatically ignores:
 - .git, .hg, .svn
 - node_modules
 - Python virtual environments (venv, .venv, env)
+- IDE directories (.idea, .vscode)
 - Binary files (null-byte detection)
 - Large files (over 5 MB by default)
 - Common non-text extensions (images, archives, executables)
 
 ## Extending Detection Patterns
 
-Detection patterns are defined in:
+Detection patterns are defined as `SecretPattern` dataclass instances in:
 
     src/secret_scanner/patterns.py
 
-You may extend or modify these patterns to detect additional token types.
+Each pattern has a `rule_id`, `name`, `severity`, `pattern` (regex), and `description`. You can add new patterns by appending to the `PATTERNS` list.
 
 ## Programmatic Usage
 
 Example using the Python API:
 
-    from pathlib import Path
-    from secret_scanner import scan_directory
+```python
+from pathlib import Path
+from secret_scanner import scan_directory
 
-    matches = scan_directory(Path("."), output_path=None)
-    for m in matches:
-        print(m["file"], m["line"], m["match"])
+matches = scan_directory(Path("."), output_path=None)
+for m in matches:
+    print(f"[{m['severity']}] {m['rule_name']}: {m['file']}:{m['line']}")
+```
 
 ## Running Tests
 
-    pytest -q
+    PYTHONPATH=src pytest tests/ -q
 
 ## Contributing
 
@@ -141,4 +224,3 @@ Contributions are welcome.
 ## License
 
 This project is licensed under the MIT License. See the LICENSE file for full details.
-

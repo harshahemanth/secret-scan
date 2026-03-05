@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from .scanner import scan_directory
+from .ignore import IgnoreRules
 
 
 def parse_args(argv=None):
@@ -42,15 +43,34 @@ def parse_args(argv=None):
         help="Additional file extension to skip (e.g. .log). "
              "Can be passed multiple times.",
     )
-    parser.add_argument(
+
+    output_group = parser.add_mutually_exclusive_group()
+    output_group.add_argument(
         "--json",
         action="store_true",
         help="Print results as JSON to stdout.",
     )
+    output_group.add_argument(
+        "--sarif",
+        action="store_true",
+        help="Print results in SARIF v2.1.0 format to stdout (for CI integration).",
+    )
+
+    parser.add_argument(
+        "--no-fail",
+        action="store_true",
+        help="Always exit with code 0 even if secrets are found (advisory mode).",
+    )
+    parser.add_argument(
+        "--no-ignore",
+        action="store_true",
+        help="Do not read .secretscanignore file.",
+    )
     return parser.parse_args(argv)
 
 
-def main(argv=None):
+def run(argv=None) -> int:
+    """Run the scanner and return an exit code (0 = clean, 1 = secrets found)."""
     args = parse_args(argv)
 
     root = Path(args.path).expanduser()
@@ -64,6 +84,9 @@ def main(argv=None):
     extra_dirs = set(args.skip_dir) if args.skip_dir else None
     extra_exts = set(args.skip_ext) if args.skip_ext else None
 
+    # If --no-ignore, pass empty rules to bypass auto-loading
+    ignore_rules = IgnoreRules() if args.no_ignore else None
+
     print(f"Scanning directory: {root}", file=sys.stderr)
     if output is not None:
         print(f"Writing text results to: {output}", file=sys.stderr)
@@ -74,16 +97,29 @@ def main(argv=None):
         skip_dirs=extra_dirs,
         skip_exts=extra_exts,
         max_file_size_bytes=max_bytes,
+        ignore_rules=ignore_rules,
     )
 
     print(f"Scan complete. {len(matches)} potential secret(s) found.", file=sys.stderr)
 
-    if args.json:
-        # Pretty JSON to stdout
+    if args.sarif:
+        from .sarif import generate_sarif, sarif_to_json
+        sarif_doc = generate_sarif(matches, str(root.resolve()))
+        sys.stdout.write(sarif_to_json(sarif_doc))
+        print()
+    elif args.json:
         json.dump(matches, sys.stdout, indent=2)
-        print()  # newline after JSON
+        print()
+
+    if matches and not args.no_fail:
+        return 1
+    return 0
+
+
+def main(argv=None):
+    """Entry point that exits with appropriate code."""
+    sys.exit(run(argv))
 
 
 if __name__ == "__main__":
     main(sys.argv[1:])
-
