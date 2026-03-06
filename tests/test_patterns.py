@@ -66,6 +66,9 @@ class TestGitHubPatterns:
     def test_github_refresh_token(self):
         assert _matches_rule("ghr_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij", "github-refresh-token")
 
+    def test_github_pat_40_chars(self):
+        assert _matches_rule("ghp_" + "A" * 40, "github-personal-access-token")
+
     def test_github_fine_grained(self):
         assert _matches_rule("github_pat_ABCDEFGHIJKLMNOPQRSTUV12", "github-fine-grained-pat")
 
@@ -233,17 +236,40 @@ class TestExistingPatterns:
     def test_openai_key(self):
         assert _matches_rule("sk-ABCDEFGHIJKLMNOPQRSTUV123456", "openai-api-key")
 
+    def test_openai_key_with_hyphens(self):
+        key = "sk-proj-" + "a1b2c3d4e5f6g7h8i9j0" * 4
+        assert _matches_rule(key, "openai-api-key")
+
     def test_openai_key_assignment(self):
         assert _matches_rule(
             'OPENAI_API_KEY="sk-ABCDEFGHIJKLMNOPQRSTUV123456"',
             "openai-api-key-assignment",
         )
 
+    def test_openai_key_assignment_with_proj(self):
+        key = "sk-proj-" + "a1b2c3d4e5f6g7h8i9j0" * 4
+        assert _matches_rule(
+            f'OPENAI_API_KEY="{key}"',
+            "openai-api-key-assignment",
+        )
+
     def test_azure_storage_key(self):
         assert _matches_rule("Azure_Storage_AccountKey=abc123def456", "azure-storage-key")
 
-    def test_database_connection_string(self):
-        assert _matches_rule("mongodb=userpassword1234567", "database-connection-string")
+    def test_database_connection_string_mongodb(self):
+        assert _matches_rule("mongodb://admin:password123@localhost:27017/mydb", "database-connection-string")
+
+    def test_database_connection_string_postgres(self):
+        assert _matches_rule("postgres://user:secret@db.example.com:5432/prod", "database-connection-string")
+
+    def test_database_connection_string_mongodb_srv(self):
+        assert _matches_rule("mongodb+srv://user:pass@cluster.mongodb.net/db", "database-connection-string")
+
+    def test_database_connection_string_redis(self):
+        assert _matches_rule("redis://default:password@host:6379/0", "database-connection-string")
+
+    def test_database_connection_string_mysql(self):
+        assert _matches_rule("mysql://root:secret@localhost:3306/app", "database-connection-string")
 
     def test_ssh_rsa_key(self):
         assert _matches_rule("ssh-rsa AAAAB3NzaC1yc2EAAAADAQ", "ssh-rsa-key")
